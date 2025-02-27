@@ -1,5 +1,7 @@
 import numpy as np
 import re
+import tqdm
+import torch
 
 class markov:
     def __init__(self, text):
@@ -34,7 +36,7 @@ class markov:
         self.words = text.split()
 
     def count_transitions(self):
-        for i in range(len(self.words) - 1):
+        for i in tqdm.tqdm(range(len(self.words) - 1)):
             current_word = self.words[i]
             next_word = self.words[i + 1]
 
@@ -51,15 +53,19 @@ class markov:
         self.num_words = len(self.unique_words)
         self.transition_matrix = np.zeros((self.num_words, self.num_words))
 
-        for i, word in enumerate(self.unique_words):
+        for i, word in tqdm.tqdm(enumerate(self.unique_words)):
             if word in self.transitions:
                 for next_word, count in self.transitions[word].items():
                     j = self.unique_words.index(next_word)
                     self.transition_matrix[i, j] = count
 
     def normalize_transition_matrix(self):
-        row_sums = self.transition_matrix.sum(axis=1)
-        self.transition_matrix_normalized = np.divide(self.transition_matrix, row_sums[:, np.newaxis], out=np.zeros_like(self.transition_matrix), where=row_sums[:, np.newaxis]!=0)
+        def softmax(x):
+            e_x = np.exp(x - np.max(x))
+            return e_x / e_x.sum(axis=1, keepdims=True)
+
+        self.transition_matrix_normalized = softmax(self.transition_matrix)
+        #self.transition_matrix_normalized = np.divide(self.transition_matrix, row_sums[:, np.newaxis], out=np.zeros_like(self.transition_matrix), where=row_sums[:, np.newaxis]!=0)
 
     def fit(self, mode="remove"):
         self.process_text(mode=mode)
@@ -70,27 +76,39 @@ class markov:
     def generate_text_sequential(self, seed=-1, num_words=100):
         if seed == -1:
             seed = np.random.randint(self.num_words)
-        current_word = self.unique_words[seed]
+        #current_word = self.unique_words[seed]
+        current_word = seed
         text = current_word
 
         for i in range(num_words):
-            current_index = self.unique_words.index(current_word)
-            next_index = np.random.choice(self.num_words, p=self.transition_matrix_normalized[current_index])
-            current_word = self.unique_words[next_index]
-            text += ' ' + current_word
+            try:
+                current_index = self.unique_words.index(current_word)
+                next_index = np.random.choice(self.num_words, p=self.transition_matrix_normalized[current_index])
+                current_word = self.unique_words[next_index]
+                text += ' ' + current_word
+            except:
+                return current_word
 
         return text
     
     def generate_text_recursive(self, seed=-1, num_words=100):
+        
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if seed == -1:
             seed = np.random.randint(self.num_words)
         text = self.unique_words[seed]
-        transition_matrix_power = self.transition_matrix_normalized
+        transition_matrix_power = torch.tensor(self.transition_matrix_normalized).float()
+        transition_matrix_power = transition_matrix_power.to(device)
+
+        torch_normalised = torch.tensor(self.transition_matrix_normalized).float()
+        torch_normalised = torch_normalised.to(device)
         
         for i in range(num_words):
-            transition_matrix_power = np.matmul(transition_matrix_power, self.transition_matrix_normalized)
-            next_index = np.random.choice(self.num_words, p=transition_matrix_power[0])
+            transition_matrix_power  = torch.matmul(transition_matrix_power, torch_normalised)
+            next_index = torch.multinomial(transition_matrix_power[0], 1)
+            #next_index = np.random.choice(self.num_words, p=transition_matrix_power.cpu()[0])
             current_word = self.unique_words[next_index]
+            #print(current_word, end=' ')
             text += ' ' + current_word
 
         return text

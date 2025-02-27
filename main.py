@@ -1,15 +1,29 @@
-import src.markov as markov
+from embeddings import *
 
-text = """
-Trancers  started out as an homage to pulp detective novels, with noted similarities to other cult sci-fi movies, such as Blade Runner and The Terminator (the latter of which was released the same year). In the series, time travel is initially made possible using a drug that sends the person into the consciousness of a relation, but expanded to include the pre-set co-ordinates of a time machine, with the fourth and fifth films introducing other means of time travel between other dimensions.
-"""
+# Create word embeddings
+model = create_word_embeddings()
 
-m = markov.markov(text)
-m.fit(mode="remove")
+# control experiment
+good = Word("good", model)
+great = Word("great", model)
+bad = Word("bad", model)
+terrible = Word("terrible", model)
 
-print(m)
+similarity = good.calculate_cosine_similarity(great)
+print(f"Similarity between good and great: {similarity}")
 
-print(m.transition_matrix)
+similarity = bad.calculate_cosine_similarity(terrible)
+print(f"Similarity between bad and terrible: {similarity}")
 
-# Generated Sequentially
-print(m.generate_text_sequential(seed=0, num_words=10))
+similarity = good.calculate_cosine_similarity(bad)
+print(f"Similarity between good and bad: {similarity}")
+
+similarity = great.calculate_cosine_similarity(terrible)
+print(f"Similarity between great and terrible: {similarity}")
+
+
+markov_sentence = Sentence("a drug that sends the series time machine with noted similarities", model)
+gpt_sentence = Sentence("drug induced time travel allows humans to inhabit the consciousness of relatives, initially the modus operandi for the Trancers series", model)
+
+similarity = markov_sentence.calculate_cosine_similarity(gpt_sentence)
+print(similarity)
